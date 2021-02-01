@@ -1,14 +1,12 @@
 use std::{convert::TryFrom as _, path::PathBuf};
 
-use futures::future::select;
+use futures::{channel::oneshot, future::select};
 use hyper::{
     service::{make_service_fn, service_fn},
-    Body, Method, Request, Response, StatusCode,
+    Body, Method, Request, Response, Server, StatusCode,
 };
 use tokio::fs::File;
 use tokio_util::codec::{BytesCodec, FramedRead};
-use futures::channel::oneshot;
-use hyper::Server;
 
 const NOT_FOUND: &[u8] = b"Not found";
 
