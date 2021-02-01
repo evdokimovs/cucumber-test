@@ -8,6 +8,8 @@ use fantoccini::{Client, ClientBuilder};
 use serde_json::Value as Json;
 use uuid::Uuid;
 
+use self::file_server::FileServer;
+
 struct EntityFactory(Client);
 
 impl EntityFactory {
@@ -89,11 +91,9 @@ impl Builder for Room {
         JsExecutable::new(
             r#"
                 () => {
-                    const [url] = arguments;
-                    let room = window.jason.init_room();
-                    await room.join(url);
+                    const [id] = arguments;
 
-                    return room;
+                    return { id: id };
                 }
             "#,
             vec![self.id.into()],
@@ -192,7 +192,7 @@ impl World for BrowserWorld {
             .connect("http://localhost:4444")
             .await
             .unwrap();
-        c.goto("localhost:3000/index.html").await.unwrap();
+        c.goto("localhost:30000/index.html").await.unwrap();
 
         Ok(Self::new(c).await)
     }
@@ -212,10 +212,7 @@ async fn then_room_should_exist(world: &mut BrowserWorld, id: String) {
 
 #[tokio::main]
 async fn main() {
-    // let server = run_test_files_server("0.0.0.0:30000");
-    // tokio::time::delay_for(std::time::Duration::from_secs(60 * 60)).await;
-    // return;
-    file_server::run().await;
-    // let runner = BrowserWorld::init(&["./features"]);
-    // runner.run_and_exit().await;
+    let _server = FileServer::run();
+    let runner = BrowserWorld::init(&["./features"]);
+    runner.run_and_exit().await;
 }

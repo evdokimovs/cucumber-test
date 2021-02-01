@@ -1,24 +1,40 @@
 use std::{convert::TryFrom as _, path::PathBuf};
 
+use futures::future::select;
 use hyper::{
     service::{make_service_fn, service_fn},
     Body, Method, Request, Response, StatusCode,
 };
 use tokio::fs::File;
 use tokio_util::codec::{BytesCodec, FramedRead};
+use futures::channel::oneshot;
+use hyper::Server;
 
 const NOT_FOUND: &[u8] = b"Not found";
 
-pub async fn run() {
-    use hyper::Server;
+pub struct FileServer(Option<oneshot::Sender<()>>);
 
-    let make_service = make_service_fn(|_| async {
-        Ok::<_, hyper::Error>(service_fn(response_files))
-    });
-    let server =
-        Server::bind(&"0.0.0.0:30000".parse().unwrap()).serve(make_service);
+impl FileServer {
+    pub fn run() -> Self {
+        let make_service = make_service_fn(|_| async {
+            Ok::<_, hyper::Error>(service_fn(response_files))
+        });
+        let server =
+            Server::bind(&"0.0.0.0:30000".parse().unwrap()).serve(make_service);
 
-    server.await.unwrap();
+        let (tx, rx) = oneshot::channel();
+        tokio::spawn(select(server, rx));
+
+        Self(Some(tx))
+    }
+}
+
+impl Drop for FileServer {
+    fn drop(&mut self) {
+        if let Some(tx) = self.0.take() {
+            let _ = tx.send(());
+        }
+    }
 }
 
 fn not_found() -> Response<Body> {
