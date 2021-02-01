@@ -39,6 +39,23 @@ impl<T> Entity<T> {
             )
             .await
     }
+
+    async fn execute_async(&mut self, js: JsExecutable) -> Json {
+        self.client
+            .execute_async(
+                JsExecutable::new(
+                    r#"
+                    () => {
+                        const [id] = args;
+                        return window.holders.get(id);
+                    }
+                "#,
+                    vec![self.id.clone().into()],
+                )
+                .and_then(js),
+            )
+            .await
+    }
 }
 
 pub trait Builder {

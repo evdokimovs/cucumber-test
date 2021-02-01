@@ -18,23 +18,17 @@ impl WebClient {
     }
 
     pub async fn execute(&mut self, executable: JsExecutable) -> Json {
-        let mut final_js = r#"
-            let lastResult;
-            let objs;
-            let args;
-        "#
-        .to_string();
-        let mut args = Vec::new();
+        let (mut js, args) = executable.into_js();
+        js.push_str("return lastResult;\n");
 
-        let mut executable = Some(Box::new(executable));
-        while let Some(mut e) = executable.take() {
-            final_js.push_str(&e.get_js());
-            args.push(std::mem::take(&mut e.args).into());
-            executable = e.pop();
-        }
-        final_js.push_str("return lastResult;\n");
+        self.0.execute(&js, args).await.unwrap()
+    }
 
-        self.0.execute(&final_js, args).await.unwrap()
+    pub async fn execute_async(&mut self, executable: JsExecutable) -> Json {
+        let (mut js, args) = executable.into_js();
+        js.push_str("callback(lastResult);\n");
+
+        self.0.execute_async(&js, args).await.unwrap()
     }
 }
 
@@ -106,6 +100,25 @@ impl JsExecutable {
         out.push_str(&expr);
 
         out
+    }
+
+    fn into_js(self) -> (String, Vec<Json>) {
+        let mut final_js = r#"
+            let lastResult;
+            let objs;
+            let args;
+        "#
+        .to_string();
+        let mut args = Vec::new();
+
+        let mut executable = Some(Box::new(self));
+        while let Some(mut e) = executable.take() {
+            final_js.push_str(&e.get_js());
+            args.push(std::mem::take(&mut e.args).into());
+            executable = e.pop();
+        }
+
+        (final_js, args)
     }
 
     fn pop(self) -> Option<Box<Self>> {
