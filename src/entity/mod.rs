@@ -2,21 +2,20 @@ mod room;
 
 use std::marker::PhantomData;
 
-use fantoccini::Client;
 use serde_json::Value as Json;
 
-use crate::utils::JsExecutable;
+use crate::utils::{JsExecutable, WebClient};
 
 pub use self::room::Room;
 
 pub struct Entity<T> {
     pub id: String,
-    pub client: Client,
+    pub client: WebClient,
     _entity_type: PhantomData<T>,
 }
 
 impl<T> Entity<T> {
-    pub fn new(uri: String, client: Client) -> Self {
+    pub fn new(uri: String, client: WebClient) -> Self {
         Self {
             id: uri,
             client,
@@ -27,16 +26,18 @@ impl<T> Entity<T> {
     async fn execute(&mut self, js: JsExecutable) -> Json {
         self.client
             .execute(
-                &format!(
-                    "{}\nreturn ({})(window.holders.get('{}'));",
-                    js.get_js_for_objs(),
-                    js.expression,
-                    self.id
-                ),
-                js.args,
+                JsExecutable::new(
+                    r#"
+                    () => {
+                        const [id] = args;
+                        return window.holders.get(id);
+                    }
+                "#,
+                    vec![self.id.clone().into()],
+                )
+                .and_then(js),
             )
             .await
-            .unwrap()
     }
 }
 

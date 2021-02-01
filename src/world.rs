@@ -2,10 +2,12 @@ use std::{collections::HashMap, convert::Infallible};
 
 use async_trait::async_trait;
 use cucumber_rust::{World, WorldInit};
-use fantoccini::{Client, ClientBuilder};
 use uuid::Uuid;
 
-use crate::entity::{Builder, Entity, Room};
+use crate::{
+    entity::{Builder, Entity, Room},
+    utils::{JsExecutable, WebClient},
+};
 
 #[derive(WorldInit)]
 pub struct BrowserWorld {
@@ -14,11 +16,17 @@ pub struct BrowserWorld {
 }
 
 impl BrowserWorld {
-    pub async fn new(mut client: Client) -> Self {
+    pub async fn new(mut client: WebClient) -> Self {
         client
-            .execute("window.holders = new Map();", vec![])
-            .await
-            .unwrap();
+            .execute(JsExecutable::new(
+                r#"
+                () => {
+                    window.holders = new Map();
+                }
+            "#,
+                vec![],
+            ))
+            .await;
         Self {
             entity_factory: EntityFactory(client),
             rooms: HashMap::new(),
@@ -43,38 +51,29 @@ impl World for BrowserWorld {
     type Error = Infallible;
 
     async fn new() -> Result<Self, Infallible> {
-        let mut c = ClientBuilder::native()
-            .connect("http://localhost:4444")
-            .await
-            .unwrap();
-        c.goto("localhost:30000/index.html").await.unwrap();
-
-        Ok(Self::new(c).await)
+        Ok(Self::new(WebClient::new().await).await)
     }
 }
 
-struct EntityFactory(Client);
+struct EntityFactory(WebClient);
 
 impl EntityFactory {
     pub async fn new_entity<T>(&mut self, obj: T) -> Entity<T>
     where
         T: Builder,
     {
-        let js_build = obj.build();
         let id = Uuid::new_v4().to_string();
-
         self.0
-            .execute(
-                &format!(
-                    "{}\nwindow.holders.set('{}', ({})());",
-                    js_build.get_js_for_objs(),
-                    id,
-                    js_build.expression
-                ),
-                js_build.args,
-            )
-            .await
-            .unwrap();
+            .execute(obj.build().and_then(JsExecutable::new(
+                r#"
+                    (obj) => {
+                        const [id] = args;
+                        window.holders.set(id, obj);
+                    }
+                "#,
+                vec![id.clone().into()],
+            )))
+            .await;
 
         Entity::new(id, self.0.clone())
     }

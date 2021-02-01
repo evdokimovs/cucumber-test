@@ -17,7 +17,7 @@ impl Builder for Room {
         JsExecutable::new(
             r#"
                 () => {
-                    const [id] = arguments;
+                    const [id] = args;
 
                     return { id: id };
                 }
