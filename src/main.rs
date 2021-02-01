@@ -1,13 +1,23 @@
-use std::{cell::RefCell, convert::Infallible};
-use std::{collections::HashMap, marker::PhantomData, path::PathBuf};
+use std::{
+    collections::HashMap,
+    convert::{Infallible, TryFrom as _},
+    marker::PhantomData,
+    path::PathBuf,
+};
 
-use actix_files::NamedFile;
-use actix_web::{dev::Server, web, App, HttpRequest, HttpServer};
 use async_trait::async_trait;
 use cucumber_rust::{given, then, when, World, WorldInit};
 use fantoccini::{Client, ClientBuilder};
-use serde_json::{Value as Json, Value};
+use hyper::{
+    service::{make_service_fn, service_fn},
+    Body, Method, Request, Response, StatusCode,
+};
+use serde_json::Value as Json;
+use tokio::fs::File;
+use tokio_util::codec::{BytesCodec, FramedRead};
 use uuid::Uuid;
+
+const NOT_FOUND: &[u8] = b"Not found";
 
 struct EntityFactory(Client);
 
@@ -22,8 +32,10 @@ impl EntityFactory {
         self.0
             .execute(
                 &format!(
-                    "window.holders.set('{}', ({})());",
-                    id, js_build.expression
+                    "{}\nwindow.holders.set('{}', ({})());",
+                    js_build.get_js_for_objs(),
+                    id,
+                    js_build.expression
                 ),
                 js_build.args,
             )
@@ -37,14 +49,41 @@ impl EntityFactory {
 struct JsExecutable {
     expression: String,
     args: Vec<Json>,
+    objs: Vec<String>,
 }
 
 impl JsExecutable {
-    pub fn new<T>(expression: &str, args: Vec<Json>) -> Self {
+    pub fn new(expression: &str, args: Vec<Json>) -> Self {
         Self {
             expression: expression.to_string(),
             args,
+            objs: Vec::new(),
         }
+    }
+
+    pub fn with_objs<T>(
+        expression: &str,
+        args: Vec<Json>,
+        objs: Vec<&Entity<T>>,
+    ) -> Self {
+        Self {
+            expression: expression.to_string(),
+            args,
+            objs: objs.into_iter().map(|o| o.id.clone()).collect(),
+        }
+    }
+
+    pub fn get_js_for_objs(&self) -> String {
+        let mut objs = String::new();
+        objs.push_str("let objs = [];");
+        for obj in &self.objs {
+            objs.push_str(&format!(
+                "objs.push(window.holders.get('{}'));",
+                obj
+            ));
+        }
+
+        objs
     }
 }
 
@@ -61,9 +100,11 @@ impl Builder for Room {
         JsExecutable::new(
             r#"
                 () => {
-                    const [id] = arguments;
+                    const [url] = arguments;
+                    let room = window.jason.init_room();
+                    await room.join(url);
 
-                    return { id: id };
+                    return room;
                 }
             "#,
             vec![self.id.into()],
@@ -104,13 +145,16 @@ impl BrowserWorld {
 
 impl Entity<Room> {
     pub async fn get_id(&mut self) -> String {
-        self.execute(JsExecutable::new(
+        self.execute(JsExecutable::with_objs(
             r#"
             (room) => {
-                return room.id;
+                const [objRoom] = objs;
+
+                return objRoom.id;
             }
         "#,
             vec![],
+            vec![&self],
         ))
         .await
         .as_str()
@@ -138,8 +182,10 @@ impl<T> Entity<T> {
         self.client
             .execute(
                 &format!(
-                    "return ({})(window.holders.get('{}'));",
-                    js.expression, self.id
+                    "{}\nreturn ({})(window.holders.get('{}'));",
+                    js.get_js_for_objs(),
+                    js.expression,
+                    self.id
                 ),
                 js.args,
             )
@@ -153,10 +199,11 @@ impl World for BrowserWorld {
     type Error = Infallible;
 
     async fn new() -> Result<Self, Infallible> {
-        let c = ClientBuilder::native()
+        let mut c = ClientBuilder::native()
             .connect("http://localhost:4444")
             .await
             .unwrap();
+        c.goto("localhost:3000/index.html").await.unwrap();
 
         Ok(Self::new(c).await)
     }
@@ -176,6 +223,51 @@ async fn then_room_should_exist(world: &mut BrowserWorld, id: String) {
 
 #[tokio::main]
 async fn main() {
-    let runner = BrowserWorld::init(&["./features"]);
-    runner.run_and_exit().await;
+    // let server = run_test_files_server("0.0.0.0:30000");
+    // tokio::time::delay_for(std::time::Duration::from_secs(60 * 60)).await;
+    // return;
+    run_file_server().await;
+    // let runner = BrowserWorld::init(&["./features"]);
+    // runner.run_and_exit().await;
+}
+
+fn not_found() -> Response<Body> {
+    Response::builder()
+        .status(StatusCode::NOT_FOUND)
+        .body(NOT_FOUND.into())
+        .unwrap()
+}
+
+async fn response_files(
+    req: Request<Body>,
+) -> Result<Response<Body>, hyper::Error> {
+    let path = &req.uri().path()[1..];
+    let path: PathBuf = PathBuf::try_from(path).unwrap();
+
+    if !(path.starts_with("jason") || path.starts_with("index.html")) {
+        return Ok(not_found());
+    }
+
+    if req.method() == Method::GET {
+        if let Ok(file) = File::open(path).await {
+            let stream = FramedRead::new(file, BytesCodec::new());
+            let body = Body::wrap_stream(stream);
+
+            return Ok(Response::new(body));
+        }
+    }
+
+    Ok(not_found())
+}
+
+async fn run_file_server() {
+    use hyper::Server;
+
+    let make_service = make_service_fn(|_| async {
+        Ok::<_, hyper::Error>(service_fn(response_files))
+    });
+    let server =
+        Server::bind(&"0.0.0.0:30000".parse().unwrap()).serve(make_service);
+
+    server.await.unwrap();
 }

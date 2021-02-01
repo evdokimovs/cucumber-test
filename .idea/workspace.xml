@@ -14,7 +14,12 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="0f72b7e0-e066-4c6b-b4fd-3ec4080ed617" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/features/example.feature" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/features/example.feature" beforeDir="false" afterPath="$PROJECT_DIR$/features/example.feature" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -49,6 +54,7 @@
   </component>
   <component name="RustProjectSettings">
     <option name="toolchainHomeDirectory" value="$USER_HOME$/.cargo/bin" />
+    <option name="version" value="2" />
   </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="Vcs.Log.Tabs.Properties">
@@ -61,6 +67,7 @@
         </entry>
       </map>
     </option>
+    <option name="oldMeFiltersMigrated" value="true" />
   </component>
   <component name="WindowStateProjectService">
     <state x="444" y="119" width="1028" height="835" key="#Project_Structure" timestamp="1611930673471">
@@ -75,10 +82,14 @@
       <screen x="0" y="0" width="1920" height="1080" />
     </state>
     <state x="453" y="282" width="986" height="720" key="SettingsEditor/0.0.1920.1080@0.0.1920.1080" timestamp="1611931268383" />
-    <state x="537" y="23" width="809" height="739" key="com.intellij.openapi.editor.actions.MultiplePasteAction$ClipboardContentChooser" timestamp="1612172546470">
+    <state x="533" y="-13" width="809" height="739" key="com.intellij.openapi.editor.actions.MultiplePasteAction$ClipboardContentChooser" timestamp="1612188746042">
       <screen x="0" y="0" width="1920" height="1080" />
     </state>
-    <state x="537" y="23" width="809" height="739" key="com.intellij.openapi.editor.actions.MultiplePasteAction$ClipboardContentChooser/0.0.1920.1080@0.0.1920.1080" timestamp="1612172546470" />
+    <state x="533" y="-13" width="809" height="739" key="com.intellij.openapi.editor.actions.MultiplePasteAction$ClipboardContentChooser/0.0.1920.1080@0.0.1920.1080" timestamp="1612188746042" />
+    <state x="8" y="31" width="1904" height="1041" key="dock-window-1" timestamp="1612184058175">
+      <screen x="0" y="0" width="1920" height="1080" />
+    </state>
+    <state x="8" y="31" width="1904" height="1041" key="dock-window-1/0.0.1920.1080@0.0.1920.1080" timestamp="1612184058175" />
     <state x="623" y="260" width="672" height="678" key="search.everywhere.popup" timestamp="1611929112489">
       <screen x="0" y="0" width="1920" height="1080" />
     </state>
