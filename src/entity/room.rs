@@ -1,6 +1,7 @@
-use crate::{entity::Entity, utils::JsExecutable};
+use crate::{browser::JsExecutable, entity::Entity};
 
 use super::Builder;
+use crate::entity::CallbackSubscriber;
 
 pub struct Room {
     id: String,
@@ -21,7 +22,7 @@ impl Builder for Room {
 
                     let jason = await window.getJason();
                     let room = await jason.init_room();
-                    room.on_failed_local_stream(() => {});
+                    room.on_failed_local_media(() => {});
                     room.on_connection_loss(() => {});
 
                     return room;
@@ -33,21 +34,24 @@ impl Builder for Room {
 }
 
 impl Entity<Room> {
-    pub async fn wait_for_on_new_connection(&mut self) {
-        self.execute_async(JsExecutable::new(
+    pub async fn subscribe_on_new_connection(
+        &mut self,
+        sub: &mut Entity<CallbackSubscriber>,
+    ) {
+        self.execute_async(JsExecutable::with_objs(
             r#"
                 async (room) => {
-                    let waitCallback = new Promise((resolve, reject) => {
-                        room.on_new_connection(() => {
-                            resolve();
-                        });
-                    });
+                    const [sub] = objs;
 
-                    await waitCallback;
+                    room.on_new_connection(() => {
+                        sub.fired();
+                    });
                 }
             "#,
             vec![],
-        )).await;
+            vec![&sub],
+        ))
+        .await;
     }
 
     pub async fn join(&mut self, uri: String) {
@@ -59,6 +63,7 @@ impl Entity<Room> {
                 }
             "#,
             vec![uri.into()],
-        )).await;
+        ))
+        .await;
     }
 }

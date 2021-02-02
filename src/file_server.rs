@@ -53,15 +53,9 @@ async fn response_files(
     }
 
     let mime = match path.extension().unwrap().to_str().unwrap() {
-        "js" => {
-            "text/javascript"
-        }
-        "html" => {
-            "text/html"
-        }
-        "wasm" => {
-            "application/wasm"
-        }
+        "js" => "text/javascript",
+        "html" => "text/html",
+        "wasm" => "application/wasm",
         _ => panic!(),
     };
 
@@ -70,7 +64,8 @@ async fn response_files(
             let stream = FramedRead::new(file, BytesCodec::new());
             let body = Body::wrap_stream(stream);
 
-            return Ok(Response::builder().header("Content-Type", mime)
+            return Ok(Response::builder()
+                .header("Content-Type", mime)
                 .body(body)
                 .unwrap());
         }

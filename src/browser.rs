@@ -1,8 +1,7 @@
 use fantoccini::{Client, ClientBuilder, Locator};
-use serde_json::Value as Json;
-use serde_json::json;
-use webdriver::capabilities::Capabilities;
 use serde::Deserialize;
+use serde_json::{json, Value as Json};
+use webdriver::capabilities::Capabilities;
 
 use crate::entity::Entity;
 
@@ -42,6 +41,11 @@ impl WebClient {
             .await
             .unwrap();
         c.goto("localhost:30000/index.html").await.unwrap();
+        c.wait_for_navigation(Some(
+            "localhost:30000/index.html".parse().unwrap(),
+        ))
+        .await
+        .unwrap();
         c.wait_for_find(Locator::Id("loaded")).await.unwrap();
 
         Self(c)
@@ -90,19 +94,32 @@ impl WebClient {
         self.0.execute(&js, args).await.unwrap()
     }
 
-    pub async fn execute_async(&mut self, executable: JsExecutable) -> Result<Json, Json> {
+    pub async fn execute_async(
+        &mut self,
+        executable: JsExecutable,
+    ) -> Result<Json, Json> {
         let mut js = "(async () => { try {".to_string();
-        let (mut inner_js, args) = executable.into_js();
+        let (inner_js, args) = executable.into_js();
         js.push_str(&inner_js);
-        js.push_str("arguments[arguments.length - 1]( { ok: lastResult });\n");
-        js.push_str(r#"
+        js.push_str("arguments[arguments.length - 1]({ ok: lastResult });\n");
+        js.push_str(
+            r#"
         } catch (e) {
+            let callback = arguments[arguments.length - 1];
             if (e.ptr != undefined) {
-                arguments[arguments.length - 1]({ err: { name: e.name(), message: e.message(), trace: e.trace(), source: e.source() } });
+                callback({
+                    err: {
+                        name: e.name(),
+                        message: e.message(),
+                        trace: e.trace(),
+                        source: e.source()
+                    }
+                });
             } else {
-                arguments[arguments.length - 1]({ err: e });
+                callback({ err: e });
             }
-        } } )();"#);
+        } } )();"#,
+        );
         let res = self.0.execute_async(&js, args).await.unwrap();
 
         serde_json::from_value::<JsResult>(res).unwrap().into()
@@ -169,7 +186,8 @@ impl JsExecutable {
     fn get_js(&self) -> String {
         let args = format!("args = arguments[{}];\n", self.depth);
         let objs = self.get_js_for_objs();
-        let expr = format!("lastResult = await ({})(lastResult);\n", self.expression);
+        let expr =
+            format!("lastResult = await ({})(lastResult);\n", self.expression);
 
         let mut out = String::new();
         out.push_str(&args);

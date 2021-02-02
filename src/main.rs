@@ -1,24 +1,33 @@
+mod browser;
 mod entity;
 mod file_server;
-mod utils;
 mod world;
 
-use cucumber_rust::{given, then, WorldInit as _};
+use cucumber_rust::{given, then, when, WorldInit as _};
 
 use self::{file_server::FileServer, world::BrowserWorld};
 
-#[given(regex = "Room with ID '(.*)'")]
-async fn given_room_with_id(world: &mut BrowserWorld, id: String) {
+#[given(regex = "Member (.*)")]
+async fn given_member(world: &mut BrowserWorld, id: String) {
     world.create_room(&id).await;
 }
 
-#[then(regex = "Room with ID '(.*)' should exist in the BrowserWorld")]
-async fn then_room_should_exist(world: &mut BrowserWorld, id: String) {
+#[when(regex = "(.*) joins Room")]
+async fn when_member_joins_room(world: &mut BrowserWorld, id: String) {
     let room = world.get_room(&id).unwrap();
-    room.wait_for_on_new_connection().await;
-    room.join("ws://localhost".to_string()).await;
-    // let js_id = room.get_id().await;
-    // assert_eq!(id, js_id);
+    room.join(format!(
+        "ws://127.0.0.1:8080/ws/test-room/{}?token=test",
+        id
+    ))
+    .await;
+}
+
+#[then(regex = "(.*)'s Room.on_new_connection callback fires")]
+async fn then_on_new_connection_callback_fires(
+    world: &mut BrowserWorld,
+    id: String,
+) {
+    world.wait_for_on_new_connection(&id).await;
 }
 
 #[tokio::main]

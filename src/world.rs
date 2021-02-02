@@ -5,14 +5,15 @@ use cucumber_rust::{World, WorldInit};
 use uuid::Uuid;
 
 use crate::{
-    entity::{Builder, Entity, Room},
-    utils::{JsExecutable, WebClient},
+    browser::{JsExecutable, WebClient},
+    entity::{Builder, CallbackSubscriber, Entity, Room},
 };
 
 #[derive(WorldInit)]
 pub struct BrowserWorld {
     entity_factory: EntityFactory,
     rooms: HashMap<String, Entity<Room>>,
+    on_new_connection_subs: HashMap<String, Entity<CallbackSubscriber>>,
 }
 
 impl BrowserWorld {
@@ -31,15 +32,29 @@ impl BrowserWorld {
         Self {
             entity_factory: EntityFactory(client),
             rooms: HashMap::new(),
+            on_new_connection_subs: HashMap::new(),
         }
     }
 
     pub async fn create_room(&mut self, id: &str) {
-        let room = self
+        let mut room = self
             .entity_factory
             .new_entity(Room::new(id.to_string()))
             .await;
+        let mut on_new_connection =
+            self.entity_factory.new_entity(CallbackSubscriber).await;
+        room.subscribe_on_new_connection(&mut on_new_connection)
+            .await;
+
+        self.on_new_connection_subs
+            .insert(id.to_string(), on_new_connection);
         self.rooms.insert(id.to_string(), room);
+    }
+
+    pub async fn wait_for_on_new_connection(&mut self, id: &str) {
+        let on_new_connection =
+            self.on_new_connection_subs.get_mut(id).unwrap();
+        on_new_connection.wait_for_call().await;
     }
 
     pub fn get_room(&mut self, id: &str) -> Option<&mut Entity<Room>> {

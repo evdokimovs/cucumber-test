@@ -1,12 +1,13 @@
+mod callback_subscriber;
 mod room;
 
 use std::marker::PhantomData;
 
 use serde_json::Value as Json;
 
-use crate::utils::{JsExecutable, WebClient};
+use crate::browser::{JsExecutable, WebClient};
 
-pub use self::room::Room;
+pub use self::{callback_subscriber::CallbackSubscriber, room::Room};
 
 pub struct Entity<T> {
     id: String,
@@ -29,10 +30,10 @@ impl<T> Entity<T> {
 
     async fn execute(&mut self, js: JsExecutable) -> Json {
         self.client
-            .execute_async(
+            .execute(
                 JsExecutable::new(
                     r#"
-                    async () => {
+                    () => {
                         const [id] = args;
                         return window.holders.get(id);
                     }
@@ -42,25 +43,25 @@ impl<T> Entity<T> {
                 .and_then(js),
             )
             .await
-            .unwrap()
     }
 
     async fn execute_async(&mut self, js: JsExecutable) -> Json {
         self.client
-            .execute_async(
-                JsExecutable::new(
-                    r#"
-                    async () => {
-                        const [id] = args;
-                        return window.holders.get(id);
-                    }
-                "#,
-                    vec![self.id.clone().into()],
-                )
-                .and_then(js),
-            )
+            .execute_async(self.get_obj().and_then(js))
             .await
             .unwrap()
+    }
+
+    fn get_obj(&self) -> JsExecutable {
+        JsExecutable::new(
+            r#"
+                async () => {
+                    const [id] = args;
+                    return window.holders.get(id);
+                }
+            "#,
+            vec![self.id.clone().into()],
+        )
     }
 }
 

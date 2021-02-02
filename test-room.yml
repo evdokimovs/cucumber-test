@@ -1,0 +1,32 @@
+kind: Room
+id: test-room
+spec:
+  pipeline:
+    Alice:
+      kind: Member
+      credentials:
+        plain: test
+      spec:
+        pipeline:
+          publish:
+            kind: WebRtcPublishEndpoint
+            spec:
+              p2p: Always
+          play-responder:
+            kind: WebRtcPlayEndpoint
+            spec:
+              src: "local://test-room/Bob/publish"
+    Bob:
+      kind: Member
+      credentials:
+        plain: test
+      spec:
+        pipeline:
+          publish:
+            kind: WebRtcPublishEndpoint
+            spec:
+              p2p: Always
+          play-caller:
+            kind: WebRtcPlayEndpoint
+            spec:
+              src: "local://test-room/Alice/publish"
