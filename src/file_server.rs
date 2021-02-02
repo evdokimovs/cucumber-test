@@ -52,12 +52,27 @@ async fn response_files(
         return Ok(not_found());
     }
 
+    let mime = match path.extension().unwrap().to_str().unwrap() {
+        "js" => {
+            "text/javascript"
+        }
+        "html" => {
+            "text/html"
+        }
+        "wasm" => {
+            "application/wasm"
+        }
+        _ => panic!(),
+    };
+
     if req.method() == Method::GET {
         if let Ok(file) = File::open(path).await {
             let stream = FramedRead::new(file, BytesCodec::new());
             let body = Body::wrap_stream(stream);
 
-            return Ok(Response::new(body));
+            return Ok(Response::builder().header("Content-Type", mime)
+                .body(body)
+                .unwrap());
         }
     }
 

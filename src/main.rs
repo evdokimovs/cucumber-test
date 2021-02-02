@@ -15,8 +15,10 @@ async fn given_room_with_id(world: &mut BrowserWorld, id: String) {
 #[then(regex = "Room with ID '(.*)' should exist in the BrowserWorld")]
 async fn then_room_should_exist(world: &mut BrowserWorld, id: String) {
     let room = world.get_room(&id).unwrap();
-    let js_id = room.get_id().await;
-    assert_eq!(id, js_id);
+    room.wait_for_on_new_connection().await;
+    room.join("ws://localhost".to_string()).await;
+    // let js_id = room.get_id().await;
+    // assert_eq!(id, js_id);
 }
 
 #[tokio::main]

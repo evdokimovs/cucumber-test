@@ -9,8 +9,8 @@ use crate::utils::{JsExecutable, WebClient};
 pub use self::room::Room;
 
 pub struct Entity<T> {
-    pub id: String,
-    pub client: WebClient,
+    id: String,
+    client: WebClient,
     _entity_type: PhantomData<T>,
 }
 
@@ -23,12 +23,16 @@ impl<T> Entity<T> {
         }
     }
 
+    pub fn id(&self) -> String {
+        self.id.clone()
+    }
+
     async fn execute(&mut self, js: JsExecutable) -> Json {
         self.client
-            .execute(
+            .execute_async(
                 JsExecutable::new(
                     r#"
-                    () => {
+                    async () => {
                         const [id] = args;
                         return window.holders.get(id);
                     }
@@ -38,6 +42,7 @@ impl<T> Entity<T> {
                 .and_then(js),
             )
             .await
+            .unwrap()
     }
 
     async fn execute_async(&mut self, js: JsExecutable) -> Json {
@@ -45,7 +50,7 @@ impl<T> Entity<T> {
             .execute_async(
                 JsExecutable::new(
                     r#"
-                    () => {
+                    async () => {
                         const [id] = args;
                         return window.holders.get(id);
                     }
@@ -55,6 +60,7 @@ impl<T> Entity<T> {
                 .and_then(js),
             )
             .await
+            .unwrap()
     }
 }
 

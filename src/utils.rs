@@ -1,7 +1,35 @@
-use fantoccini::{Client, ClientBuilder};
+use fantoccini::{Client, ClientBuilder, Locator};
 use serde_json::Value as Json;
+use serde_json::json;
+use webdriver::capabilities::Capabilities;
+use serde::Deserialize;
 
 use crate::entity::Entity;
+
+const CHROME_ARGS: &[&str] = &[
+    "--use-fake-device-for-media-stream",
+    "--use-fake-ui-for-media-stream",
+    "--disable-web-security",
+    "--disable-dev-shm-usage",
+    "--no-sandbox",
+];
+const FIREFOX_ARGS: &[&str] = &[];
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum JsResult {
+    Ok(Json),
+    Err(Json),
+}
+
+impl From<JsResult> for Result<Json, Json> {
+    fn from(from: JsResult) -> Self {
+        match from {
+            JsResult::Ok(ok) => Self::Ok(ok),
+            JsResult::Err(err) => Self::Err(err),
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct WebClient(Client);
@@ -9,12 +37,50 @@ pub struct WebClient(Client);
 impl WebClient {
     pub async fn new() -> Self {
         let mut c = ClientBuilder::native()
+            .capabilities(Self::get_webdriver_capabilities())
             .connect("http://localhost:4444")
             .await
             .unwrap();
         c.goto("localhost:30000/index.html").await.unwrap();
+        c.wait_for_find(Locator::Id("loaded")).await.unwrap();
 
         Self(c)
+    }
+
+    /// Returns `moz:firefoxOptions` for the Firefox browser based on
+    /// [`TestRunner`] configuration.
+    fn get_firefox_caps() -> serde_json::Value {
+        json!({
+            "prefs": {
+                "media.navigator.streams.fake": true,
+                "media.navigator.permission.disabled": true,
+                "media.autoplay.enabled": true,
+                "media.autoplay.enabled.user-gestures-needed ": false,
+                "media.autoplay.ask-permission": false,
+                "media.autoplay.default": 0,
+            },
+            "args": FIREFOX_ARGS,
+        })
+    }
+
+    /// Returns `goog:chromeOptions` for the Chrome browser based on
+    /// [`TestRunner`] configuration.
+    fn get_chrome_caps() -> serde_json::Value {
+        json!({ "args": CHROME_ARGS })
+    }
+
+    /// Returns [WebDriver capabilities] based on [`TestRunner`] configuration.
+    ///
+    /// [WebDriver capabilities]:
+    /// https://developer.mozilla.org/en-US/docs/Web/WebDriver/Capabilities
+    fn get_webdriver_capabilities() -> Capabilities {
+        let mut capabilities = Capabilities::new();
+        capabilities
+            .insert("moz:firefoxOptions".to_string(), Self::get_firefox_caps());
+        capabilities
+            .insert("goog:chromeOptions".to_string(), Self::get_chrome_caps());
+
+        capabilities
     }
 
     pub async fn execute(&mut self, executable: JsExecutable) -> Json {
@@ -24,11 +90,22 @@ impl WebClient {
         self.0.execute(&js, args).await.unwrap()
     }
 
-    pub async fn execute_async(&mut self, executable: JsExecutable) -> Json {
-        let (mut js, args) = executable.into_js();
-        js.push_str("callback(lastResult);\n");
+    pub async fn execute_async(&mut self, executable: JsExecutable) -> Result<Json, Json> {
+        let mut js = "(async () => { try {".to_string();
+        let (mut inner_js, args) = executable.into_js();
+        js.push_str(&inner_js);
+        js.push_str("arguments[arguments.length - 1]( { ok: lastResult });\n");
+        js.push_str(r#"
+        } catch (e) {
+            if (e.ptr != undefined) {
+                arguments[arguments.length - 1]({ err: { name: e.name(), message: e.message(), trace: e.trace(), source: e.source() } });
+            } else {
+                arguments[arguments.length - 1]({ err: e });
+            }
+        } } )();"#);
+        let res = self.0.execute_async(&js, args).await.unwrap();
 
-        self.0.execute_async(&js, args).await.unwrap()
+        serde_json::from_value::<JsResult>(res).unwrap().into()
     }
 }
 
@@ -59,7 +136,7 @@ impl JsExecutable {
         Self {
             expression: expression.to_string(),
             args,
-            objs: objs.into_iter().map(|o| o.id.clone()).collect(),
+            objs: objs.into_iter().map(|o| o.id()).collect(),
             and_then: None,
             depth: 0,
         }
@@ -92,7 +169,7 @@ impl JsExecutable {
     fn get_js(&self) -> String {
         let args = format!("args = arguments[{}];\n", self.depth);
         let objs = self.get_js_for_objs();
-        let expr = format!("lastResult = ({})(lastResult);\n", self.expression);
+        let expr = format!("lastResult = await ({})(lastResult);\n", self.expression);
 
         let mut out = String::new();
         out.push_str(&args);

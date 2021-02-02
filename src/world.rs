@@ -18,15 +18,16 @@ pub struct BrowserWorld {
 impl BrowserWorld {
     pub async fn new(mut client: WebClient) -> Self {
         client
-            .execute(JsExecutable::new(
+            .execute_async(JsExecutable::new(
                 r#"
-                () => {
+                async () => {
                     window.holders = new Map();
                 }
             "#,
                 vec![],
             ))
-            .await;
+            .await
+            .unwrap();
         Self {
             entity_factory: EntityFactory(client),
             rooms: HashMap::new(),
@@ -64,16 +65,17 @@ impl EntityFactory {
     {
         let id = Uuid::new_v4().to_string();
         self.0
-            .execute(obj.build().and_then(JsExecutable::new(
+            .execute_async(obj.build().and_then(JsExecutable::new(
                 r#"
-                    (obj) => {
+                    async (obj) => {
                         const [id] = args;
                         window.holders.set(id, obj);
                     }
                 "#,
                 vec![id.clone().into()],
             )))
-            .await;
+            .await
+            .unwrap();
 
         Entity::new(id, self.0.clone())
     }

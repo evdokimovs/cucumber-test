@@ -16,10 +16,15 @@ impl Builder for Room {
     fn build(self) -> JsExecutable {
         JsExecutable::new(
             r#"
-                () => {
+                async () => {
                     const [id] = args;
 
-                    return { id: id };
+                    let jason = await window.getJason();
+                    let room = await jason.init_room();
+                    room.on_failed_local_stream(() => {});
+                    room.on_connection_loss(() => {});
+
+                    return room;
                 }
             "#,
             vec![self.id.into()],
@@ -28,21 +33,32 @@ impl Builder for Room {
 }
 
 impl Entity<Room> {
-    pub async fn get_id(&mut self) -> String {
-        self.execute(JsExecutable::with_objs(
+    pub async fn wait_for_on_new_connection(&mut self) {
+        self.execute_async(JsExecutable::new(
             r#"
-            (room) => {
-                const [objRoom] = objs;
+                async (room) => {
+                    let waitCallback = new Promise((resolve, reject) => {
+                        room.on_new_connection(() => {
+                            resolve();
+                        });
+                    });
 
-                return objRoom.id;
-            }
-        "#,
+                    await waitCallback;
+                }
+            "#,
             vec![],
-            vec![&self],
-        ))
-        .await
-        .as_str()
-        .unwrap()
-        .to_string()
+        )).await;
+    }
+
+    pub async fn join(&mut self, uri: String) {
+        self.execute_async(JsExecutable::new(
+            r#"
+                async (room) => {
+                    const [uri] = args;
+                    await room.join(uri);
+                }
+            "#,
+            vec![uri.into()],
+        )).await;
     }
 }
